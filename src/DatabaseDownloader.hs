@@ -6,19 +6,23 @@
 module DatabaseDownloader (downloadDatabase, downloadSummary, PDBRecord (..)) where
 
 import BioTypes (Fasta, FastaRecord (fAliases, fSequence), ResidueSequence, parseFasta)
-import Control.Applicative (optional)
+import Control.Applicative (liftA2, optional)
+import Control.Arrow (first)
 import Control.Lens ((<&>))
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), eitherDecode, genericParseJSON, genericToJSON, object, (.=))
 import qualified Data.Aeson as A
 import Data.Aeson.Encode.Pretty
+import Data.Bifunctor (bimap)
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Lazy.Char8 (unpack)
+import Data.Char (isDigit)
 import Data.Csv hiding (encode, (.=))
 import Data.Data (Data)
 import Data.Function (on)
 import Data.List (find, groupBy, intercalate)
 import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.Vector as V
+import Debug.Trace (traceShowId)
 import GHC.Generics (Generic)
 import Network.HTTP.Conduit (simpleHttp)
 import System.Directory (createDirectoryIfMissing)
@@ -58,6 +62,7 @@ data PDBRecord = Record
   deriving (Generic, Data, Show)
 
 instance FromJSON PDBRecord -- TODO: WTF is that
+instance ToJSON PDBRecord
 
 instance FromNamedRecord PDBRecord where
   parseNamedRecord r =
@@ -70,17 +75,17 @@ instance FromNamedRecord PDBRecord where
       <*> r .: "Hchain"
       <*> r .: "Lchain"
 
-instance ToJSON PDBRecord where
-  toJSON record =
-    object
-      [ "pdb" .= pdb record
-      , "resolution" .= resolution record
-      , "method" .= method record
-      , "scfv" .= scfv record
-      , "heavy_species" .= heavySpecies record
-      , "Hchain" .= hChain record
-      , "Lchain" .= lChain record
-      ]
+-- instance ToJSON PDBRecord where
+--   toJSON record =
+--     object
+--       [ "pdb" .= pdb record
+--       , "resolution" .= resolution record
+--       , "method" .= method record
+--       , "scfv" .= scfv record
+--       , "heavy_species" .= heavySpecies record
+--       , "Hchain" .= hChain record
+--       , "Lchain" .= lChain record
+--       ]
 
 -- TODO: Download in bulk
 downloadPDBs :: FilePath -> [String] -> IO ()
@@ -102,7 +107,7 @@ downloadFastas path = mapM_ downloadWithDir
     simpleHttp (url id) >>= L.writeFile (filePath id)
 
 fetchNumbering :: ResidueSequence -> IO L.ByteString
-fetchNumbering s = simpleHttp $ "http://www.bioinf.org.uk/abs/abnum/abnum.cgi?plain=1&aaseq=" ++ s ++ "&scheme=Martin"
+fetchNumbering s = simpleHttp $ "http://www.bioinf.org.uk/abs/abnum/abnum.cgi?plain=1&aaseq=" ++ s ++ "&scheme=-m" -- Martin
 
 data NumberingJSON = NumberingJSON
   { heavy :: String -- TODO: make something more sensible than string
@@ -121,19 +126,16 @@ downloadNumberings = mapM_ . downloadNumbering
 downloadNumbering :: FilePath -> String -> IO ()
 downloadNumbering path id = getFasta >>= makeNumbering >>= L.writeFile numberingFile
  where
-  numberingFile = path </> id </> (id ++ "numbering")
+  numberingFile = path </> id </> "numbering.txt"
   jsonFile = path </> id </> "description.json"
   getFasta = parseFasta <$> readFile (path </> id </> (id ++ ".fasta"))
   getChainNames file = case eitherDecode file :: Either String PDBRecord of
     Left err -> error $ "Error parsing JSON while downloading numbering for " ++ id ++ ": " ++ err
     Right record -> (head $ hChain record, head $ lChain record)
   makeNumbering :: Fasta -> IO L.ByteString
-  makeNumbering fasta = do
-    (l, h) <- getChainNames <$> L.readFile jsonFile
-    let extractChain c = fSequence $ fromJust $ find (elem c . fAliases) fasta
-    hNumbering <- unpack <$> fetchNumbering (extractChain h)
-    lNumbering <- unpack <$> fetchNumbering (extractChain l)
-    return $ encodePretty NumberingJSON{heavy = hNumbering, light = lNumbering}
+  makeNumbering fasta = L.readFile jsonFile >>= (uncurry (liftA2 (<>)) . bimap getNum getNum) . getChainNames
+   where
+    getNum c = fetchNumbering $ fSequence $ fromJust $ find (elem c . fAliases) fasta
 
 writeJSONs :: FilePath -> [PDBRecord] -> IO ()
 writeJSONs path = mapM_ $ \record -> L.writeFile (path </> pdb record </> "description.json") (encodePretty record)

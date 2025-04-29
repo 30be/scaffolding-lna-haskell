@@ -12,13 +12,14 @@ import BioTypes (Atom (..), Distance, Residue (..), ResidueName, distance, parse
 import Control.Applicative (liftA2)
 import Control.Monad (join, zipWithM_)
 import Data.Aeson (KeyValue ((.=)), ToJSON (toEncoding), defaultOptions, eitherDecode, encode, genericToEncoding, object)
+import Data.Bifunctor (bimap)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC8
-import Data.Char (ord)
+import Data.Char (isDigit, ord)
 import Data.Function (on)
 import qualified Data.HashMap.Lazy as Map
 import Data.List (find, groupBy, nub, (\\))
-import Data.List.Split (splitOn)
+import Data.List.Split (splitOn, startsWith)
 import Data.Maybe (catMaybes, fromJust)
 import qualified DatabaseDownloader as DD
 import GHC.Generics
@@ -47,7 +48,7 @@ parseResidueTable _contents _name = [] -- TODO: Make it...
 processPDBDir :: FilePath -> String -> IO ()
 processPDBDir dir name = processPDB . parseResidueTable <$> L.readFile "aminoacids.rtp" <*> readFiles >>= writeFiles
  where
-  filePaths = map ((dir </> name) </>) ["description.json", name ++ ".pdb", name ++ ".fasta", "numbering"]
+  filePaths = map ((dir </> name) </>) ["description.json", name ++ ".pdb", name ++ ".fasta", "numbering.txt"]
   readFiles = mapM L.readFile filePaths
   writeFiles = zipWithM_ L.writeFile filePaths
 
@@ -63,9 +64,10 @@ processPDB residueTable [jsonContent, pdbContent, fastaContent, numberingContent
         , method = DD.method initialRecord
         , hChains = splitOn "," $ DD.hChain initialRecord
         , lChains = splitOn "," $ DD.lChain initialRecord
-        , numbering = [] -- parseNumbering numberingContent TODO: Do
+        , numbering = bimap pn pn $ span ((== 'H') . head) $ lines $ LC8.unpack numberingContent
         , reflections = [] -- catMaybes $ zipWith analyzeReflection (hChains description) (lChains description) -- TODO: do
         }
+    pn = parseNumbering . unlines
     newPDB = cleanupPDB description pdbContent
     pdbAtoms = map (parseAtom . LC8.unpack) $ init $ LC8.lines newPDB -- init for the END
     analyzeReflection :: L.ByteString -> L.ByteString -> Maybe Protein
@@ -90,6 +92,7 @@ makeReason bs = encode $ object ["reason" .= bs]
 chooseBestReflection :: PDBDescription -> L.ByteString -> L.ByteString -> [L.ByteString]
 chooseBestReflection _ _ _ = [makeReason "TODO: Choose best reflection"]
 
+type Numbering = [(Int, Char)]
 data Protein = Protein
   { missingResidues :: [(Int, Int)]
   , missingAtoms :: [MissingAtom]
@@ -101,7 +104,7 @@ data PDBDescription = Description
   , method :: String
   , hChains :: [String]
   , lChains :: [String]
-  , numbering :: [(Int, String)]
+  , numbering :: (Numbering, Numbering)
   , reflections :: [Protein]
   }
   deriving (Generic)
@@ -118,6 +121,9 @@ instance ToJSON PDBDescription where
 
 pdbResidues :: [Atom] -> [Residue]
 pdbResidues = nub . map atomResidue -- n^2
+
+parseNumbering :: String -> Numbering
+parseNumbering = map (bimap read (last . ('0' :)) . span isDigit . tail . head . words) . lines
 
 -- TODO: In DatabaseDownloader fastas should have adequate names beforehand...
 -- Assuming header looks like "> X ..."

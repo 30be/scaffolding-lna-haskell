@@ -3,6 +3,7 @@ module BioTypes where
 import Data.List (groupBy)
 import Data.List.Split (splitOn)
 import Data.Ord (comparing)
+import Debug.Trace (traceId, traceShowId)
 import Text.Regex.TDFA
 
 type Position = (Double, Double, Double)
@@ -26,14 +27,15 @@ data Atom = Atom
   }
   deriving (Show, Eq)
 
-instance Ord Atom
-compare = comparing atomId
+instance Ord Atom where
+  compare = comparing atomId
 
 type ResidueSequence = String
 data FastaRecord = FastaRecord
   { fAliases :: [Char]
   , fSequence :: ResidueSequence
   }
+  deriving (Show)
 type Fasta = [FastaRecord]
 
 parseFasta :: String -> Fasta
@@ -44,9 +46,9 @@ parseFasta = map parseRecord . groupBy sameRecord . lines
    where
     aliases = map handleAlias . splitOn ", " $ extractAliases header
     extractAliases :: String -> String
-    extractAliases input = case input =~ "(?:Chain|Chains)\\s([^|]+)" of
-      (_ : gem : _) : _ -> gem
-      _ -> error $ "Invalid FASTA header: " ++ header
+    extractAliases input = case input =~ "(Chain|Chains) ([^|]+)" of
+      (_ : _ : gem : _) : _ -> gem
+      e -> error $ "Invalid FASTA header: " ++ header ++ "\nfound: " ++ show e
     handleAlias :: String -> Char
     handleAlias [a] = a
     handleAlias [_, '[', 'a', 'u', 't', 'h', ' ', b, ']'] = b
