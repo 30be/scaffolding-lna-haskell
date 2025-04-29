@@ -1,0 +1,117 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.38.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           s-lnahs
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/s-lnahs#readme>
+homepage:       https://github.com/githubuser/s-lnahs#readme
+bug-reports:    https://github.com/githubuser/s-lnahs/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2025 Author name here
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/s-lnahs
+
+library
+  exposed-modules:
+      BioTypes
+      DatabaseDownloader
+      DatabaseProcessor
+  other-modules:
+      Paths_s_lnahs
+  autogen-modules:
+      Paths_s_lnahs
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      aeson >=2.0
+    , aeson-pretty
+    , base >=4.7 && <5
+    , bytestring >=0.10
+    , cassava >=0.5
+    , directory >=1.2
+    , exceptions >=0.10
+    , filepath >=1.4
+    , http-conduit >=2.3.0 && <3.0.0
+    , lens >=4.15
+    , mtl >=2.2
+    , process >=1.6
+    , split
+    , text >=1.2
+    , unordered-containers >=0.2
+    , vector >=0.12
+    , wreq >=0.5
+  default-language: Haskell2010
+
+executable s-lnahs-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_s_lnahs
+  autogen-modules:
+      Paths_s_lnahs
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=2.0
+    , aeson-pretty
+    , base >=4.7 && <5
+    , bytestring >=0.10
+    , cassava >=0.5
+    , directory >=1.2
+    , exceptions >=0.10
+    , filepath >=1.4
+    , http-conduit >=2.3.0 && <3.0.0
+    , lens >=4.15
+    , mtl >=2.2
+    , process >=1.6
+    , s-lnahs
+    , split
+    , text >=1.2
+    , unordered-containers >=0.2
+    , vector >=0.12
+    , wreq >=0.5
+  default-language: Haskell2010
+
+test-suite s-lnahs-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_s_lnahs
+  autogen-modules:
+      Paths_s_lnahs
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=2.0
+    , aeson-pretty
+    , base >=4.7 && <5
+    , bytestring >=0.10
+    , cassava >=0.5
+    , directory >=1.2
+    , exceptions >=0.10
+    , filepath >=1.4
+    , http-conduit >=2.3.0 && <3.0.0
+    , lens >=4.15
+    , mtl >=2.2
+    , process >=1.6
+    , s-lnahs
+    , split
+    , text >=1.2
+    , unordered-containers >=0.2
+    , vector >=0.12
+    , wreq >=0.5
+  default-language: Haskell2010

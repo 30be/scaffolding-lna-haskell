@@ -1,0 +1,115 @@
+module Numbering where
+
+import BioTypes (ResidueSequence)
+import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Lazy.Char8 as LC8
+import Data.Maybe (mapMaybe)
+import Network.HTTP.Conduit (simpleHttp)
+import System.Directory (doesFileExist)
+
+data ChainType = Light | Heavy deriving (Show, Eq)
+data Insertion = NoInsertion | Insertion Char deriving (Show, Eq, Ord)
+data MartinNumber = MartinNumber
+  { mnBaseNumber :: Int
+  , mnInsertion :: Insertion
+  }
+  deriving (Show, Eq)
+
+instance Ord MartinNumber where
+  compare (MartinNumber n1 i1) (MartinNumber n2 i2) = compare n1 n2 <> compare i1 i2
+
+data AntibodyRegion
+  = FR Int
+  | CDR ChainType Int
+  deriving (Show, Eq)
+
+getLightRegion, getHeavyRegion :: Int -> AntibodyRegion
+getLightRegion n
+  | n >= 24 && n <= 34 = CDR Light 1
+  | n >= 50 && n <= 56 = CDR Light 2
+  | n >= 89 && n <= 97 = CDR Light 3
+  | n >= 1 && n <= 23 = FR 1
+  | n >= 35 && n <= 49 = FR 2
+  | n >= 57 && n <= 88 = FR 3
+  | n >= 98 = FR 4 -- TODO: Check
+  | otherwise = error "Martin number is strange"
+getHeavyRegion n
+  | n >= 26 && n <= 35 = CDR Heavy 1
+  | n >= 50 && n <= 65 = CDR Heavy 2
+  | n >= 95 && n <= 102 = CDR Heavy 3 -- TODO: Some complexity can be here...
+  | n >= 1 && n <= 25 = FR 1
+  | n >= 36 && n <= 49 = FR 2
+  | n >= 66 && n <= 94 = FR 3
+  | n >= 103 = FR 4
+  | otherwise = error "Martin number is strange"
+
+type Numbering = [MartinNumber]
+
+downloadNumbering :: ResidueSequence -> IO L.ByteString
+downloadNumbering s = simpleHttp $ "http://www.bioinf.org.uk/abs/abnum/abnum.cgi?plain=1&aaseq=" ++ s ++ "&scheme=Martin"
+
+-- TODO: Test it
+getChainSequence :: FilePath -> String -> String -> IO (Maybe String)
+getChainSequence fastaPath pdbId chainId = do
+  exists <- doesFileExist fastaPath
+  if not exists
+    then return Nothing
+    else do
+      fastaContent <- L.readFile fastaPath
+      -- Simple FASTA parsing: Find header line like ">pdbid|chainid"
+      -- And read the sequence lines until the next header or end of file.
+      let contentLines = LC8.lines fastaContent
+      let targetHeader = LC8.pack (">" ++ pdbId ++ "|" ++ chainId)
+
+      case LC8.break (LC8.isPrefixOf targetHeader) contentLines of
+        (_, []) -> return Nothing -- Header not found
+        (_, (_ : sequenceLines)) ->
+          let sequence = LC8.takeWhile (not . LC8.isPrefixOf (LC8.pack ">")) sequenceLines
+           in return $ Just (LC8.unpack (LC8.concat sequence))
+
+parseAbnumOutput :: L.ByteString -> Maybe Numbering
+parseAbnumOutput bs = case LC8.lines bs of
+  [] -> Nothing -- Empty output
+  (header : rest) ->
+    let
+      -- Parse header like ">1a0q|A"
+      -- Expecting format ">pdbid|chainid"
+      mChainID = case LC8.break (== '|') header of
+        ('>', chainIDAndRest) -> Just (LC8.unpack (LC8.tail chainIDAndRest))
+        _ -> Nothing -- Doesn't match expected header format
+
+      -- Parse rest of lines like "1 A FR1"
+      parseResidueLine line = case LC8.words line of
+        [numBS, resBS, regionBS] ->
+          case reads (LC8.unpack numBS) of
+            [(num, "")] ->
+              case LC8.uncons resBS of
+                Just (resChar, _) -> Just (num, resChar, LC8.unpack regionBS)
+                Nothing -> Nothing -- Empty residue string
+            _ -> Nothing -- Couldn't parse number
+        _ -> Nothing -- Doesn't match expected residue line format
+     in
+      mChainID >>= \chainID -> Just $ mapMaybe parseResidueLine rest
+
+-- Helper to split comma-separated chain IDs
+splitChains :: String -> [String]
+splitChains s = if null s then [] else words (map (\c -> if c == ',' then ' ' else c) s)
+
+-- Function to process a single chain (get sequence, get numbering)
+processChain :: FilePath -> String -> String -> IO (Maybe Numbering)
+processChain path pdbId chainId = do
+  let fastaPath = path </> pdbId </> (pdbId ++ ".fasta")
+  mSequence <- getChainSequence fastaPath pdbId chainId
+  case mSequence of
+    Nothing -> do
+      putStrLn $ "Warning: Could not get sequence for " ++ pdbId ++ " chain " ++ chainId
+      return Nothing
+    Just sequence -> do
+      if null sequence
+        then do
+          putStrLn $ "Warning: Empty sequence for " ++ pdbId ++ " chain " ++ chainId
+          return Nothing
+        else do
+          putStrLn $ "Processing numbering for " ++ pdbId ++ " chain " ++ chainId ++ "..."
+          abnumBytes <- getNumbering sequence
+          return $ parseAbnumOutput abnumBytes

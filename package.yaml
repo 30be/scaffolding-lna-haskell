@@ -1,0 +1,76 @@
+name:                s-lnahs
+version:             0.1.0.0
+github:              "githubuser/s-lnahs"
+license:             BSD-3-Clause
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2025 Author name here"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/s-lnahs#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- bytestring >= 0.10        # For ByteString operations
+- text >= 1.2               # For Text operations
+- directory >= 1.2          # For directory operations (create, check existence)
+- filepath >= 1.4           # For path manipulation (</>, <.>)
+- process >= 1.6            # For running external processes (ANARCI)
+- wreq >= 0.5               # For HTTP requests
+- lens >= 4.15              # For lens operators (^.) used with wreq
+- cassava >= 0.5            # For CSV/TSV parsing
+- vector >= 0.12            # Used by cassava
+- aeson >= 2.0              # For JSON encoding/decoding
+- unordered-containers >= 0.2 # For HashMap (if you use it later)
+- exceptions >= 0.10        # For exception handling (try)
+- mtl >= 2.2                # For MonadIO, liftIO
+- http-conduit >=2.3.0 && <3.0.0
+- split
+- aeson-pretty
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
+
+executables:
+  s-lnahs-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -Wall
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - s-lnahs
+
+tests:
+  s-lnahs-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - s-lnahs

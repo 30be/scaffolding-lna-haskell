@@ -1,0 +1,54 @@
+{-# LANGUAGE RecordWildCards #-}
+
+module Clashes (getClashes, Atom, parseAtom) where
+
+import BioTypes
+import Data.List (sortBy)
+import Data.Ord (comparing)
+
+maxAtomRadius :: Double
+maxAtomRadius = maximum $ map radiusMap ['C', 'H', 'N', 'O', 'P', 'S']
+
+coord :: Int -> Atom -> Double
+coord axis atom = let (x, y, z) = atomPos atom in [x, y, z] !! axis
+data Tree
+  = Empty
+  | Leaf Atom
+  | Node
+      { axis :: Int
+      , location :: Atom
+      , left :: Tree
+      , right :: Tree
+      }
+  deriving (Show)
+
+buildTree :: Int -> [Atom] -> Tree
+buildTree _ [] = Empty
+buildTree _ [a] = Leaf a
+buildTree ax atoms = Node ax medianNode (buildTree nextAx lesser) (buildTree nextAx greater)
+ where
+  n = length atoms
+  mid = n `div` 2
+  sorted = sortBy (comparing (coord ax)) atoms
+  (lesser, medianNode : greater) = splitAt mid sorted
+  nextAx = (ax + 1) `mod` 3
+
+queryTree :: Tree -> Atom -> [(Atom, Distance)]
+queryTree Empty _ = []
+queryTree (Leaf leafAtom) queryAtom = checkClash leafAtom queryAtom
+queryTree (Node{..}) queryAtom =
+  checkClash location queryAtom ++ queryTree nearSubtree queryAtom ++ queryTree farSubtreeIfNeeded
+ where
+  queryCoord = coord axis queryAtom
+  locationCoord = coord axis location
+  delta = queryCoord - locationCoord
+  (nearSubtree, farSubtree) = if delta <= 0 then (left, right) else (right, left)
+  checkClash a1 a2 = [(a1, d) | let d = distance a1 a2, d < atomRadius a1 + atomRadius a2, atomId a1 /= atomId a2]
+  farSubtreeIfNeeded = if abs delta < atomRadius queryAtom + maxAtomRadius then queryTree farSubtree queryAtom else []
+
+getClashes :: [Atom] -> [(Atom, Atom, Distance)]
+getClashes atoms = uniqueClashes
+ where
+  tree = buildTree 0 atoms
+  allPairs = concatMap (\atom -> map (\(other, d) -> (atom, other, d)) (queryTree tree atom)) atoms
+  uniqueClashes = foldr (\(a1, a2, d) acc -> if atomId a1 < atomId a2 then (a1, a2, d) : acc else acc) [] allPairs

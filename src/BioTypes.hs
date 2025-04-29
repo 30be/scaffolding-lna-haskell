@@ -1,0 +1,59 @@
+module BioTypes where
+
+import Data.Ord (comparing)
+
+type Position = (Double, Double, Double)
+type Distance = Double
+type ResidueName = String -- TODO: make enum
+type ResidueSequence = String
+
+data Residue = Residue
+  { residueName :: ResidueName
+  , residueChain :: Char
+  , residueId :: Int
+  }
+  deriving (Show, Eq)
+
+data Atom = Atom
+  { atomId :: Int
+  , atomName :: String
+  , atomPos :: Position
+  , atomType :: Char -- TODO: Maybe use enum
+  , atomRadius :: Double
+  , atomResidue :: Residue
+  }
+  deriving (Show, Eq)
+
+instance Ord Atom where
+  compare = comparing atomId
+
+radiusMap :: Char -> Double
+radiusMap 'C' = 1.70
+radiusMap 'H' = 1.10
+radiusMap 'N' = 1.55
+radiusMap 'O' = 1.52
+radiusMap 'P' = 1.80
+radiusMap 'S' = 1.80
+radiusMap _ = 1.5
+
+distance :: Atom -> Atom -> Distance
+distance a1 a2 = sqrt $ (x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2
+ where
+  (x1, y1, z1) = atomPos a1
+  (x2, y2, z2) = atomPos a2
+
+parseAtom :: String -> Atom
+parseAtom s =
+  Atom
+    { atomId = read (take 5 $ drop 6 s)
+    , atomName = filter (/= ' ') (take 4 $ drop 12 s)
+    , atomPos = (read (take 8 $ drop 30 s), read (take 8 $ drop 38 s), read (take 8 $ drop 46 s))
+    , atomType = s !! 77
+    , atomRadius = radiusMap (s !! 77)
+    , atomResidue =
+        Residue
+          { residueName = filter (/= ' ') (take 3 $ drop 17 s)
+          , residueChain = s !! 21
+          , residueId = read (take 4 $ drop 22 s)
+          }
+    }
