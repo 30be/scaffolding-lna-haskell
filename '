@@ -1,9 +1,7 @@
 module BioTypes where
 
 import Data.List (groupBy)
-import Data.List.Split (splitOn)
 import Data.Ord (comparing)
-import Text.Regex.TDFA
 
 type Position = (Double, Double, Double)
 type Distance = Double
@@ -42,15 +40,7 @@ parseFasta = map parseRecord . groupBy sameRecord . lines
   sameRecord a b = head a == '>' && head b /= '>'
   parseRecord (header : residueSequence) = FastaRecord{fAliases = aliases, fSequence = concat residueSequence}
    where
-    aliases = map handleAlias . splitOn ", " $ extractAliases header
-    extractAliases :: String -> String
-    extractAliases input = case input =~ "(?:Chain|Chains)\\s([^|]+)" of
-      (_ : gem : _) : _ -> gem
-      _ -> error $ "Invalid FASTA header: " ++ header
-    handleAlias :: String -> Char
-    handleAlias [a] = a
-    handleAlias [_, '[', 'a', 'u', 't', 'h', ' ', b, ']'] = b
-    handleAlias _ = error $ "Invalid FASTA header: " ++ header
+
   parseRecord _ = error "Invalid FASTA:"
 
 radiusMap :: Char -> Double

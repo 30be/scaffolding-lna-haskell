@@ -5,17 +5,19 @@
 
 module DatabaseDownloader (downloadDatabase, downloadSummary, PDBRecord (..)) where
 
-import BioTypes (ResidueSequence)
+import BioTypes (Fasta, FastaRecord (fAliases, fSequence), ResidueSequence, parseFasta)
 import Control.Applicative (optional)
 import Control.Lens ((<&>))
-import Data.Aeson (FromJSON, ToJSON (toJSON), encode, object, (.=))
+import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), eitherDecode, genericParseJSON, genericToJSON, object, (.=))
+import qualified Data.Aeson as A
 import Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Lazy as L
+import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Csv hiding (encode, (.=))
 import Data.Data (Data)
 import Data.Function (on)
-import Data.List (groupBy, intercalate)
-import Data.Maybe (fromMaybe)
+import Data.List (find, groupBy, intercalate)
+import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Network.HTTP.Conduit (simpleHttp)
@@ -99,15 +101,39 @@ downloadFastas path = mapM_ downloadWithDir
     createDirectoryIfMissing True (path </> id)
     simpleHttp (url id) >>= L.writeFile (filePath id)
 
-downloadNumbering :: ResidueSequence -> IO L.ByteString
-downloadNumbering s = simpleHttp $ "http://www.bioinf.org.uk/abs/abnum/abnum.cgi?plain=1&aaseq=" ++ s ++ "&scheme=Martin"
+fetchNumbering :: ResidueSequence -> IO L.ByteString
+fetchNumbering s = simpleHttp $ "http://www.bioinf.org.uk/abs/abnum/abnum.cgi?plain=1&aaseq=" ++ s ++ "&scheme=Martin"
 
--- TODO: Just what is numbering for a pdb??
+data NumberingJSON = NumberingJSON
+  { heavy :: String -- TODO: make something more sensible than string
+  , light :: String
+  }
+  deriving (Generic, Data, Show)
+
+instance FromJSON NumberingJSON where
+  parseJSON = genericParseJSON A.defaultOptions
+instance ToJSON NumberingJSON where
+  toJSON = genericToJSON A.defaultOptions
+
 downloadNumberings :: FilePath -> [String] -> IO ()
-downloadNumberings path = mapM_ $ \id -> getFasta id >>= downloadNumbering >>= L.writeFile (filePath id)
+downloadNumberings = mapM_ . downloadNumbering
+
+downloadNumbering :: FilePath -> String -> IO ()
+downloadNumbering path id = getFasta >>= makeNumbering >>= L.writeFile numberingFile
  where
-  filePath id = path </> id </> (id ++ "numbering")
-  getFasta id = readFile $ path </> id </> (id ++ ".fasta") -- TODO: Get residueSequence here.
+  numberingFile = path </> id </> (id ++ "numbering")
+  jsonFile = path </> id </> "description.json"
+  getFasta = parseFasta <$> readFile (path </> id </> (id ++ ".fasta"))
+  getChainNames file = case eitherDecode file :: Either String PDBRecord of
+    Left err -> error $ "Error parsing JSON while downloading numbering for " ++ id ++ ": " ++ err
+    Right record -> (head $ hChain record, head $ lChain record)
+  makeNumbering :: Fasta -> IO L.ByteString
+  makeNumbering fasta = do
+    (l, h) <- getChainNames <$> L.readFile jsonFile
+    let extractChain c = fSequence $ fromJust $ find (elem c . fAliases) fasta
+    hNumbering <- unpack <$> fetchNumbering (extractChain h)
+    lNumbering <- unpack <$> fetchNumbering (extractChain l)
+    return $ encodePretty NumberingJSON{heavy = hNumbering, light = lNumbering}
 
 writeJSONs :: FilePath -> [PDBRecord] -> IO ()
 writeJSONs path = mapM_ $ \record -> L.writeFile (path </> pdb record </> "description.json") (encodePretty record)
