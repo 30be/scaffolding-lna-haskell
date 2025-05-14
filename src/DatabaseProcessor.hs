@@ -177,3 +177,11 @@ cleanupPDB :: PDBDescription -> L.ByteString -> L.ByteString
 cleanupPDB description = LC8.unlines . filter isAtomOrEnd . LC8.lines
  where
   isAtomOrEnd line = L.take 4 line == "ATOM" || L.take 3 line == "END"
+
+
+
+{
+    missingResidues :: [(Int, Int, description)] - frX/cdrX
+  , missingAtoms :: [MissingAtom]
+  , atomClashes :: Int
+}

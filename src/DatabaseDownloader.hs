@@ -133,9 +133,9 @@ downloadNumbering path id = getFasta >>= makeNumbering >>= L.writeFile numbering
     Left err -> error $ "Error parsing JSON while downloading numbering for " ++ id ++ ": " ++ err
     Right record -> (head $ hChain record, head $ lChain record)
   makeNumbering :: Fasta -> IO L.ByteString
-  makeNumbering fasta = L.readFile jsonFile >>= (uncurry (liftA2 (<>)) . bimap getNum getNum) . getChainNames
+  makeNumbering fasta = L.readFile jsonFile >>= (uncurry (liftA2 (<>)) . bimap numberingC numberingC) . getChainNames
    where
-    getNum c = fetchNumbering $ fSequence $ fromJust $ find (elem c . fAliases) fasta
+    numberingC chain = fetchNumbering $ fSequence $ fromJust $ find (elem chain . fAliases) fasta
 
 writeJSONs :: FilePath -> [PDBRecord] -> IO ()
 writeJSONs path = mapM_ $ \record -> L.writeFile (path </> pdb record </> "description.json") (encodePretty record)
